@@ -112,7 +112,7 @@ def draw_polygons(surface:SurfaceType, cubes:ShapeList, color, coords):
 	for points, col in zip(pixels[order], tints[cull][order]):
 		pg.draw.polygon(surface, col, points)
 
-def distance_partition_masks(shapes:ShapeList, distance:float=0):
+def distance_partition_masks(shapes:ShapeList, distance:float=0) -> BoolArray:
 	"""Mask a group of shapes to two sides of a plane.
 	The two masks overlap at the plane.
 	"""
