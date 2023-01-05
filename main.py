@@ -11,33 +11,47 @@ SCREEN_SIZE = (1200, 900)
 LIGHTDIRR = np.array((1,-1,1)) / np.sqrt(3)
 
 def main():
+	"""Creates the main window, drawable surfaces,
+	and coordinates that rotate the camera around the origin.
+
+	3D coordinates are right-handed with z-axis up.
+
+	Calls one available implementation.
+	"""
+
 	main_window = start_engine("Explosion", SCREEN_SIZE, (240,)*3)
 	opaque = pg.Surface(SCREEN_SIZE)
 	transparent = pg.Surface(SCREEN_SIZE, flags=pg.SRCALPHA)
 	polar_coordinates:MutableSequence = [25, -TAU/16, -TAU/16]
 
 	cube_of_cubes(main_window, transparent, polar_coordinates)
-	# advent(main_window, coords)
+	# advent(main_window, polar_coordinates)
 
-# Implementations
+"""Implementations."""
 
 def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
-	"""Originally made to visuallize the reach of minecraft explosions."""
+	"""Originally made to visualize the reach of minecraft explosions."""
 
 	color = (150,200,230)
 	big_cube = span_box([-10,-10,-10], [10,10,10])
 	small_cubes = multi_span_boxes([a,b,c] for a, b, c in product(range(-10, 10), repeat=3))
 	test_cubes = multi_skeleton_boxes([a,b,c] for a, b, c in product(range(-10, 10), repeat=3))
 
-	# These are drawn transparently over the big cube to remove parts of it.
+	# These are drawn transparently over the big cube to erase parts of it.
 	sides = small_cubes[np.any((small_cubes == 10) | (small_cubes == -10), axis=(1,2,3))]
 	test_sides = test_cubes[np.any((test_cubes == 10) | (test_cubes == -10), axis=(1,2))]
+	# Must expand slightly to cover the edges.
 	sides[(sides == 10) | (sides == -10)] *= 1.003
 
 	def render():
-		coords[1] += 0.2
-		far, close = distance_partition_masks(rotate(test_cubes, coords[1:]))
-		far2, close2 = distance_partition_masks(rotate(test_sides, coords[1:]))
+		"""Rendering function to be called by the main game loop."""
+
+		angles = coords[1:]
+
+		# The small cubes that should be drawn.
+		far, close = distance_partition_masks(rotate(test_cubes, angles))
+		# The blank faces to be erased from the big cube.
+		far2, close2 = distance_partition_masks(rotate(test_sides, angles))
 
 		canvas.fill((0,0,0,0))
 		draw_polygons(canvas, big_cube, color, coords)
@@ -58,16 +72,18 @@ def advent(window:SurfaceType, coords):
 	"""Data from Advent of Code 2022 day 18."""
 
 	def center(points):
+		"""Shifts a list of unit cube coordinates to center around the origin."""
+
 		ma = np.amax(points, axis=0) + 1
 		mi = np.amin(points, axis=0)
 		return points - mi - (ma - mi) / 2
 
-	example = np.array([[2,2,2],[1,2,2],[3,2,2],[2,1,2],[2,3,2],[2,2,1],[2,2,3],[2,2,4],[2,2,6],[1,2,5],[3,2,5],[2,1,5],[2,3,5]])
-	with open("18.txt", "r", newline="\n") as f:
-		inptext = f.read().splitlines()
-	unit_cube_coords = np.array([[float(x) for x in line.split(",")] for line in inptext])
+	# with open("18.txt", "r", newline="\n") as f:
+	# 	inptext = f.read().splitlines()
+	# unit_cube_coords = np.array([[float(x) for x in line.split(",")] for line in inptext])
+	unit_cube_coords = np.array([[2,2,2],[1,2,2],[3,2,2],[2,1,2],[2,3,2],[2,2,1],[2,2,3],[2,2,4],[2,2,6],[1,2,5],[3,2,5],[2,1,5],[2,3,5]])
 
-	drop = multi_span_boxes(center(unit_cube_coords))
+	lava_drop = multi_span_boxes(center(unit_cube_coords))
 	test_cubes = multi_skeleton_boxes(center(unit_cube_coords))
 
 	# from util.colorwheel import hue_streak
@@ -75,10 +91,12 @@ def advent(window:SurfaceType, coords):
 	colors = (150,200,230)
 
 	def render():
+		"""Rendering function to be called by the main game loop."""
+
 		far, _ = distance_partition_masks(rotate(test_cubes, coords[1:]))
 
 		window.fill((240,240,240))
-		draw_polygons(window, drop[far], colors, coords)
+		draw_polygons(window, lava_drop[far], colors, coords)
 		pg.display.update()
 
 	render()
@@ -86,35 +104,34 @@ def advent(window:SurfaceType, coords):
 		pass
 	pg.quit()
 
-# Things that things do
+"""Graphics things."""
 
-def running(renderer:Callable, coords) -> bool:
-	event = pg.event.wait()
-	if event.type == pg.QUIT or pg.key.get_pressed()[pg.K_ESCAPE]:
-		return False
-	if mouse_input(event, coords):
-		renderer()
-	return True
+def draw_polygons(surface:SurfaceType, shapes:ShapeArray, color, coords):
+	"""Project polygons in 3D space onto the given surface."""
 
-def draw_polygons(surface:SurfaceType, cubes:ShapeList, color, coords):
 	zoom, angles = coords[0], coords[1:]
 
-	rotation = rotate(cubes, angles)
-	cubes = rotation[..., :4, :]
-	normals = rotation[..., 4, :]
-	tints = shade(color, normals, LIGHTDIRR)
+	rotated_shapes = rotate(shapes, angles)
+	# Hardcoded 4 corners per face since i only draw squares at the moment.
+	faces = rotated_shapes[..., :4, :]
+	normals = rotated_shapes[..., 4, :]
 
 	cull = front_face_mask(normals)
-	visible = cubes[cull]
-	pixels = project(visible, zoom, SCREEN_SIZE)
-	order = draw_order_mask(visible)
+	visible = faces[cull]
+	shaded_colors = shade(color, normals[cull], LIGHTDIRR)
 
-	for points, col in zip(pixels[order], tints[cull][order]):
+	order = draw_order_mask(visible)
+	pixels = project(visible, zoom, SCREEN_SIZE)
+
+	for points, col in zip(pixels[order], shaded_colors[order]):
 		pg.draw.polygon(surface, col, points)
 
-def distance_partition_masks(shapes:ShapeList, distance:float=0) -> BoolArray:
-	"""Mask a group of shapes to two sides of a plane.
-	The two masks overlap at the plane.
+def distance_partition_masks(shapes:ShapeArray, distance:float=0) -> tuple[BoolArray,BoolArray]:
+	"""Mask a group of shapes to either side of a plane parallell to the viewing plane.
+
+	Distance is measured from the origin.
+	The two masks overlap in the middle.
+	Use boolean oeprations to isolate specific sections.
 	"""
 
 	y = shapes[...,1]
@@ -122,10 +139,26 @@ def distance_partition_masks(shapes:ShapeList, distance:float=0) -> BoolArray:
 	close = np.any(y < distance, axis=1)
 	return far, close
 
-# Pygame things
+"""Pygame things."""
+
+def running(renderer:Callable, coords) -> bool:
+	"""Input handler. Calls the rendering function on scene changes.
+
+	Returns whether to keep the game loop running.
+	"""
+
+	event = pg.event.wait()
+	if event.type == pg.QUIT or pg.key.get_pressed()[pg.K_ESCAPE]:
+		return False
+
+	if mouse_input(event, coords):
+		renderer()
+
+	return True
 
 def mouse_input(event:Event, polar_coordinates:MutableSequence) -> bool:
 	"""Updates object rotation and zoom from mouse interactions.
+
 	Returns whether the screen needs to update.
 	"""
 
@@ -135,7 +168,7 @@ def mouse_input(event:Event, polar_coordinates:MutableSequence) -> bool:
 
 	if event.type == pg.MOUSEBUTTONDOWN:
 		pg.event.set_allowed(pg.MOUSEMOTION)
-		# Calling get_rel() once makes the next call relative to current position
+		# Calling get_rel() once so the next call is relative to current position
 		pg.mouse.get_rel()
 		return False
 
@@ -161,12 +194,14 @@ def start_engine(title:str, size:tuple[int,int], color:tuple[int,int,int]) -> Su
 	pg.display.set_caption(title)
 	window = pg.display.set_mode(size=size)
 	window.fill(color)
+
 	# We only need mouse movement when the mouse button is held down.
 	pg.event.set_blocked(pg.MOUSEMOTION)
+	# Clear any events queued by initialization.
+	pg.event.clear()
+
 	return window
 
 if __name__=="__main__":
 	print()
 	main()
-	# from util import timing
-	# timing.line(main, [draw_polygons])
