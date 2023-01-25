@@ -79,7 +79,7 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 
 		if event.type == pg.KEYDOWN:
 			try:
-				i = int(event.dict["unicode"]) - 1
+				i = int(event.unicode) - 1
 			except ValueError:
 				continue
 
