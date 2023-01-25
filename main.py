@@ -8,7 +8,7 @@ from itertools import product
 
 TAU = 2 * np.pi
 SCREEN_SIZE = (1200, 900)
-LIGHTDIRR = np.array((1,0,1)) / np.sqrt(2)
+LIGHTDIRR = np.array((1,-0.3,1)) / np.sqrt(2.09)
 
 def main():
 	"""Creates the main window, drawable surfaces,
@@ -22,7 +22,7 @@ def main():
 	main_window = start_engine("Explosion", SCREEN_SIZE, (240,)*3)
 	opaque = pg.Surface(SCREEN_SIZE)
 	transparent = pg.Surface(SCREEN_SIZE, flags=pg.SRCALPHA)
-	polar_coordinates:MutableSequence = [25, -TAU/16, -TAU/16]
+	polar_coordinates:MutableSequence = [30, -TAU/16, -TAU/16]
 
 	cube_of_cubes(main_window, transparent, polar_coordinates)
 	# advent(main_window, polar_coordinates)
@@ -30,9 +30,9 @@ def main():
 """Implementations."""
 
 def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
-	"""Originally made to visualize the reach of minecraft explosions."""
+	"""Intended to visualize the reach of minecraft explosions."""
 
-	color = (150,200,230)
+	color = (160,200,255)
 	big_cube = span_box([-10,-10,-10], [10,10,10])
 	small_cubes = multi_span_boxes([a,b,c] for a, b, c in product(range(-10, 10), repeat=3))
 	test_cubes = multi_skeleton_boxes([a,b,c] for a, b, c in product(range(-10, 10), repeat=3))
@@ -44,7 +44,7 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 	sides[(sides == 10) | (sides == -10)] *= 1.003
 
 	far3, close3 = sphere_partition_masks(test_cubes)
-	render_meshes = [True, True, True]
+	mesh_flags = [True, True, True]
 	def render():
 		"""Rendering function to be called by the main game loop."""
 
@@ -58,11 +58,11 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 
 		canvas.fill((0,0,0,0))
 		draw_polygons(canvas, big_cube, color, coords)
-		if render_meshes[0]:
+		if mesh_flags[0]:
 			draw_polygons(canvas, sides[close2 & ~far2], (0,0,0,0), coords)
-		if render_meshes[1]:
+		if mesh_flags[1]:
 			draw_polygons(canvas, small_cubes[far & close3 & far3], color, coords)
-		if render_meshes[2]:
+		if mesh_flags[2]:
 			draw_polygons(canvas, small_cubes[close & far & ~(close3 & ~far3)], color, coords)
 
 		window.fill((240,240,240))
@@ -71,8 +71,24 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 		pg.display.update()
 
 	render()
-	while running(render, render_meshes, coords):
-		pass
+
+	while True:
+		event = pg.event.wait()
+		if event.type == pg.QUIT or pg.key.get_pressed()[pg.K_ESCAPE]:
+			break
+
+		if event.type == pg.KEYDOWN:
+			try:
+				i = int(event.dict["unicode"]) - 1
+			except ValueError:
+				continue
+
+			mesh_flags[i] = not mesh_flags[i]
+			render()
+
+		if mouse_input(event, coords):
+			render()
+
 	pg.quit()
 
 def advent(window:SurfaceType, coords):
@@ -107,8 +123,15 @@ def advent(window:SurfaceType, coords):
 		pg.display.update()
 
 	render()
-	while running(render, [True,True,True], coords):
-		pass
+
+	while True:
+		event = pg.event.wait()
+		if event.type == pg.QUIT or pg.key.get_pressed()[pg.K_ESCAPE]:
+			break
+
+		if mouse_input(event, coords):
+			render()
+
 	pg.quit()
 
 """Graphics things."""
@@ -154,26 +177,6 @@ def sphere_partition_masks(shapes:ShapeArray, center:Vec3=[0,0,0], radius:float=
 	return far, close
 
 """Pygame things."""
-
-def running(renderer:Callable, mesh_flags:list[bool], coords) -> bool:
-	"""Input handler. Calls the rendering function on scene changes.
-
-	Returns whether to keep the game loop running.
-	"""
-
-	event = pg.event.wait()
-	if event.type == pg.QUIT or pg.key.get_pressed()[pg.K_ESCAPE]:
-		return False
-
-	if event.type == pg.KEYDOWN:
-		i = int(event.dict["unicode"]) - 1
-		mesh_flags[i] = not mesh_flags[i]
-		renderer()
-
-	if mouse_input(event, coords):
-		renderer()
-
-	return True
 
 def mouse_input(event:Event, polar_coordinates:MutableSequence) -> bool:
 	"""Updates object rotation and zoom from mouse interactions.
