@@ -52,8 +52,7 @@ def shade(colors:Color|ColorArray, normals:VectorArray, light_direction:Vec3) ->
 	if not isinstance(colors, NDArray):
 		colors = np.array(colors)
 
-	# Dot product
-	weights = (np.einsum("...n, n", normals, light_direction) + 1) / 2
+	weights = (arraydot(normals, light_direction) + 1) / 2
 
 	channel_count = colors.shape[-1]
 	channel_weights = np.tile(weights[..., None], channel_count)
@@ -62,3 +61,6 @@ def shade(colors:Color|ColorArray, normals:VectorArray, light_direction:Vec3) ->
 		channel_weights[..., -1] = 1
 
 	return channel_weights * colors[..., None, :]
+
+def arraydot(a, b):
+	return np.einsum("...n, ...n", a, b)

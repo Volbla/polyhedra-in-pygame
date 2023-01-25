@@ -8,7 +8,7 @@ from itertools import product
 
 TAU = 2 * np.pi
 SCREEN_SIZE = (1200, 900)
-LIGHTDIRR = np.array((1,-1,1)) / np.sqrt(3)
+LIGHTDIRR = np.array((1,0,1)) / np.sqrt(2)
 
 def main():
 	"""Creates the main window, drawable surfaces,
@@ -43,20 +43,27 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 	# Must expand slightly to cover the edges.
 	sides[(sides == 10) | (sides == -10)] *= 1.003
 
+	far3, close3 = sphere_partition_masks(test_cubes)
+	render_meshes = [True, True, True]
 	def render():
 		"""Rendering function to be called by the main game loop."""
 
 		angles = coords[1:]
+		test_rot = rotate(test_cubes, angles)
 
 		# The small cubes that should be drawn.
-		far, close = distance_partition_masks(rotate(test_cubes, angles))
+		far, close = distance_partition_masks(test_rot)
 		# The blank faces to be erased from the big cube.
 		far2, close2 = distance_partition_masks(rotate(test_sides, angles))
 
 		canvas.fill((0,0,0,0))
 		draw_polygons(canvas, big_cube, color, coords)
-		draw_polygons(canvas, sides[close2 & ~far2], (0,0,0,0), coords)
-		draw_polygons(canvas, small_cubes[close & far], color, coords)
+		if render_meshes[0]:
+			draw_polygons(canvas, sides[close2 & ~far2], (0,0,0,0), coords)
+		if render_meshes[1]:
+			draw_polygons(canvas, small_cubes[far & close3 & far3], color, coords)
+		if render_meshes[2]:
+			draw_polygons(canvas, small_cubes[close & far & ~(close3 & ~far3)], color, coords)
 
 		window.fill((240,240,240))
 		window.blit(canvas, (0,0))
@@ -64,7 +71,7 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 		pg.display.update()
 
 	render()
-	while running(render, coords):
+	while running(render, render_meshes, coords):
 		pass
 	pg.quit()
 
@@ -100,7 +107,7 @@ def advent(window:SurfaceType, coords):
 		pg.display.update()
 
 	render()
-	while running(render, coords):
+	while running(render, [True,True,True], coords):
 		pass
 	pg.quit()
 
@@ -131,17 +138,24 @@ def distance_partition_masks(shapes:ShapeArray, distance:float=0) -> tuple[BoolA
 
 	Distance is measured from the origin.
 	The two masks overlap in the middle.
-	Use boolean oeprations to isolate specific sections.
+	Use boolean operations to isolate specific sections.
 	"""
 
 	y = shapes[...,1]
-	far = np.any(y > distance, axis=1)
-	close = np.any(y < distance, axis=1)
+	far = np.any(y > distance, axis=-1)
+	close = np.any(y < distance, axis=-1)
+	return far, close
+
+def sphere_partition_masks(shapes:ShapeArray, center:Vec3=[0,0,0], radius:float=7) -> tuple[BoolArray,BoolArray]:
+	relative = shapes - center
+	distance2 = arraydot(relative, relative)
+	far = np.any(distance2 > radius ** 2, axis=-1)
+	close = np.any(distance2 < radius ** 2, axis=-1)
 	return far, close
 
 """Pygame things."""
 
-def running(renderer:Callable, coords) -> bool:
+def running(renderer:Callable, mesh_flags:list[bool], coords) -> bool:
 	"""Input handler. Calls the rendering function on scene changes.
 
 	Returns whether to keep the game loop running.
@@ -150,6 +164,11 @@ def running(renderer:Callable, coords) -> bool:
 	event = pg.event.wait()
 	if event.type == pg.QUIT or pg.key.get_pressed()[pg.K_ESCAPE]:
 		return False
+
+	if event.type == pg.KEYDOWN:
+		i = int(event.dict["unicode"]) - 1
+		mesh_flags[i] = not mesh_flags[i]
+		renderer()
 
 	if mouse_input(event, coords):
 		renderer()
@@ -184,7 +203,7 @@ def mouse_input(event:Event, polar_coordinates:MutableSequence) -> bool:
 		return True
 
 	if event.type == pg.MOUSEWHEEL:
-		polar_coordinates[0] *= (1 + event.y * 0.15)
+		polar_coordinates[0] *= 1.15 ** event.y
 		return True
 
 	return False

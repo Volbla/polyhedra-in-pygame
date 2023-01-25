@@ -1,4 +1,5 @@
 from types3D import *
+from transformations import arraydot
 
 import numpy as np
 from numpy import array
@@ -64,6 +65,6 @@ def normal(planes:ShapeArray) -> VectorArray:
 	vectors = planes[..., [1,2], :] - planes[..., [0,1], :]
 	normal = np.cross(vectors[..., 0, :], vectors[..., 1, :])
 	# Normalizing
-	length = np.sqrt(np.einsum("...i, ...i", normal, normal))
+	length = np.sqrt(arraydot(normal, normal))
 	normnorm = normal / length[:, None]
 	return normnorm
