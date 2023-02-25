@@ -10,6 +10,7 @@ TAU = 2 * np.pi
 SCREEN_SIZE = (1200, 900)
 LIGHTDIRR = np.array((1,-0.3,1)) / np.sqrt(2.09)
 
+
 def main():
 	"""Creates the main window, drawable surfaces,
 	and coordinates that rotate the camera around the origin.
@@ -26,6 +27,7 @@ def main():
 
 	cube_of_cubes(main_window, transparent, polar_coordinates)
 	# advent(main_window, polar_coordinates)
+
 
 """Implementations."""
 
@@ -91,6 +93,7 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 
 	pg.quit()
 
+
 def advent(window:SurfaceType, coords):
 	"""Data from Advent of Code 2022 day 18."""
 
@@ -134,6 +137,7 @@ def advent(window:SurfaceType, coords):
 
 	pg.quit()
 
+
 """Graphics things."""
 
 def draw_polygons(surface:SurfaceType, shapes:ShapeArray, color, coords):
@@ -156,6 +160,7 @@ def draw_polygons(surface:SurfaceType, shapes:ShapeArray, color, coords):
 	for points, col in zip(pixels[order], shaded_colors[order]):
 		pg.draw.polygon(surface, col, points)
 
+
 def distance_partition_masks(shapes:ShapeArray, distance:float=0) -> tuple[BoolArray,BoolArray]:
 	"""Mask a group of shapes to either side of a plane parallell to the viewing plane.
 
@@ -175,6 +180,7 @@ def sphere_partition_masks(shapes:ShapeArray, center:Vec3=[0,0,0], radius:float=
 	far = np.any(distance2 > radius ** 2, axis=-1)
 	close = np.any(distance2 < radius ** 2, axis=-1)
 	return far, close
+
 
 """Pygame things."""
 
@@ -211,6 +217,7 @@ def mouse_input(event:Event, polar_coordinates:MutableSequence) -> bool:
 
 	return False
 
+
 def start_engine(title:str, size:tuple[int,int], color:tuple[int,int,int]) -> SurfaceType:
 	pg.init()
 	pg.display.set_caption(title)
@@ -223,6 +230,7 @@ def start_engine(title:str, size:tuple[int,int], color:tuple[int,int,int]) -> Su
 	pg.event.clear()
 
 	return window
+
 
 if __name__=="__main__":
 	print()
