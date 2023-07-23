@@ -7,7 +7,7 @@ from pygame.event import Event
 
 
 BoolArray = NDArray[Any, Bool]
-Vec3 = NDArray[Shape["3"], Float] | list[float]
+Vec3 = NDArray[Shape["3"], Float] | Sequence[float]
 
 
 # Either a linear list of vectors, or one vector per face in a shape (e.g. normals).

@@ -34,7 +34,7 @@ def rotate(shapes:ShapeArray, polar_angles:Sequence[float]) -> ShapeArray:
 
 
 def front_face_mask(normals:VectorArray) -> BoolArray:
-	"""For back face culling."""
+	"""For back face culling in orthogonal projection."""
 
 	return normals[..., 1] < 0
 
@@ -75,4 +75,6 @@ def shade(colors:Color|ColorArray, normals:VectorArray, light_direction:Vec3) ->
 
 
 def arraydot(a, b):
+	"""Element-wise dot product of arrays of vectors."""
+
 	return np.einsum("...n, ...n", a, b)

@@ -20,24 +20,26 @@ def main():
 	Calls one available implementation.
 	"""
 
-	main_window = start_engine("Explosion", SCREEN_SIZE, (240,)*3)
-	opaque = pg.Surface(SCREEN_SIZE)
-	transparent = pg.Surface(SCREEN_SIZE, flags=pg.SRCALPHA)
+	main_window = make_gameparts("Explosion", SCREEN_SIZE, (240,)*3)
+	canvas = pg.Surface(SCREEN_SIZE, flags=pg.SRCALPHA)
 	polar_coordinates:MutableSequence = [30, -TAU/16, -TAU/16]
 
-	cube_of_cubes(main_window, transparent, polar_coordinates)
+	cube_of_cubes(main_window, canvas, polar_coordinates)
 	# advent(main_window, polar_coordinates)
 
 
 """Implementations."""
 
 def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
-	"""Intended to visualize the reach of minecraft explosions."""
+	"""Shows a cross-section of individual unit cubes inside of a larger cube volume.
+
+	Originally ntended to visualize the reach of minecraft explosions.
+	"""
 
 	color = (160,200,255)
 	big_cube = span_box([-10,-10,-10], [10,10,10])
-	small_cubes = multi_span_boxes([a,b,c] for a, b, c in product(range(-10, 10), repeat=3))
-	test_cubes = multi_skeleton_boxes([a,b,c] for a, b, c in product(range(-10, 10), repeat=3))
+	small_cubes = multi_span_boxes(product(range(-10, 10), repeat=3))
+	test_cubes = multi_skeleton_boxes(product(range(-10, 10), repeat=3))
 
 	# These are drawn transparently over the big cube to erase parts of it.
 	sides = small_cubes[np.any((small_cubes == 10) | (small_cubes == -10), axis=(1,2,3))]
@@ -45,27 +47,32 @@ def cube_of_cubes(window:SurfaceType, canvas:SurfaceType, coords):
 	# Must expand slightly to cover the edges.
 	sides[(sides == 10) | (sides == -10)] *= 1.003
 
-	far3, close3 = sphere_partition_masks(test_cubes)
+	sphere_in, sphere_out = sphere_partition_masks(test_cubes)
 	mesh_flags = [True, True, True]
 	def render():
 		"""Rendering function to be called by the main game loop."""
 
 		angles = coords[1:]
-		test_rot = rotate(test_cubes, angles)
 
 		# The small cubes that should be drawn.
-		far, close = distance_partition_masks(test_rot)
+		cubes_near, cubes_far = distance_partition_masks(rotate(test_cubes, angles))
 		# The blank faces to be erased from the big cube.
-		far2, close2 = distance_partition_masks(rotate(test_sides, angles))
+		faces_near, faces_far = distance_partition_masks(rotate(test_sides, angles))
 
 		canvas.fill((0,0,0,0))
+		# Fill in the big cube.
 		draw_polygons(canvas, big_cube, color, coords)
+
 		if mesh_flags[0]:
-			draw_polygons(canvas, sides[close2 & ~far2], (0,0,0,0), coords)
+			# Faces on near side of the partitioning plane, but not touching the plane.
+			# Draw transparently to erase from big cube.
+			draw_polygons(canvas, sides[faces_near & ~faces_far], (0,0,0,0), coords)
 		if mesh_flags[1]:
-			draw_polygons(canvas, small_cubes[far & close3 & far3], color, coords)
+			# Cubes on the far side of the plane AND touching the sphere.
+			draw_polygons(canvas, small_cubes[cubes_far & sphere_in & sphere_out], color, coords)
 		if mesh_flags[2]:
-			draw_polygons(canvas, small_cubes[close & far & ~(close3 & ~far3)], color, coords)
+			# Shapes touching the plane AND NOT inside the sphere.
+			draw_polygons(canvas, small_cubes[cubes_near & cubes_far & ~(sphere_in & ~sphere_out)], color, coords)
 
 		window.fill((240,240,240))
 		window.blit(canvas, (0,0))
@@ -146,9 +153,8 @@ def draw_polygons(surface:SurfaceType, shapes:ShapeArray, color, coords):
 	zoom, angles = coords[0], coords[1:]
 
 	rotated_shapes = rotate(shapes, angles)
-	# Hardcoded 4 corners per face since i only draw squares at the moment.
-	faces = rotated_shapes[..., :4, :]
-	normals = rotated_shapes[..., 4, :]
+	faces = rotated_shapes[..., :-1, :]
+	normals = rotated_shapes[..., -1, :]
 
 	cull = front_face_mask(normals)
 	visible = faces[cull]
@@ -161,25 +167,30 @@ def draw_polygons(surface:SurfaceType, shapes:ShapeArray, color, coords):
 		pg.draw.polygon(surface, col, points)
 
 
-def distance_partition_masks(shapes:ShapeArray, distance:float=0) -> tuple[BoolArray,BoolArray]:
+def distance_partition_masks(shapes:ShapeArray, plane_distance:float=0) -> tuple[BoolArray,BoolArray]:
 	"""Mask a group of shapes to either side of a plane parallell to the viewing plane.
 
-	Distance is measured from the origin.
-	The two masks overlap in the middle.
-	Use boolean operations to isolate specific sections.
+	The plane's distance is measured from the origin.
+	Returns two masks for shapes lying on either side of the plane. This includes shapes touching the plane,
+	which means the two masks overlap in the middle. Boolean operations can be used to isolate specific sub-sections.
 	"""
 
-	y = shapes[...,1]
-	far = np.any(y > distance, axis=-1)
-	close = np.any(y < distance, axis=-1)
-	return far, close
+	corners_y = shapes[...,1]
+	near = np.any(corners_y < plane_distance, axis=-1)
+	far = np.any(corners_y > plane_distance, axis=-1)
+
+	return near, far
 
 def sphere_partition_masks(shapes:ShapeArray, center:Vec3=[0,0,0], radius:float=7) -> tuple[BoolArray,BoolArray]:
-	relative = shapes - center
-	distance2 = arraydot(relative, relative)
-	far = np.any(distance2 > radius ** 2, axis=-1)
-	close = np.any(distance2 < radius ** 2, axis=-1)
-	return far, close
+	"""Mask a group of shapes to the inside or outside of a sphere."""
+
+	relative_dist = shapes - center
+	distance_sqr = arraydot(relative_dist, relative_dist)
+
+	inside = np.any(distance_sqr < radius ** 2, axis=-1)
+	outside = np.any(distance_sqr > radius ** 2, axis=-1)
+
+	return inside, outside
 
 
 """Pygame things."""
@@ -187,38 +198,40 @@ def sphere_partition_masks(shapes:ShapeArray, center:Vec3=[0,0,0], radius:float=
 def mouse_input(event:Event, polar_coordinates:MutableSequence) -> bool:
 	"""Updates object rotation and zoom from mouse interactions.
 
+	Mutates polar_coordinates.
 	Returns whether the screen needs to update.
 	"""
 
-	if event.type == pg.MOUSEBUTTONUP:
-		pg.event.set_blocked(pg.MOUSEMOTION)
-		return False
+	match event.type:
+		case pg.MOUSEBUTTONUP:
+			pg.event.set_blocked(pg.MOUSEMOTION)
+			return False
 
-	if event.type == pg.MOUSEBUTTONDOWN:
-		pg.event.set_allowed(pg.MOUSEMOTION)
-		# Calling get_rel() once so the next call is relative to current position
-		pg.mouse.get_rel()
-		return False
+		case pg.MOUSEBUTTONDOWN:
+			pg.event.set_allowed(pg.MOUSEMOTION)
+			# Calling get_rel() once so the next call is relative to current position
+			pg.mouse.get_rel()
+			return False
 
-	if event.type == pg.MOUSEMOTION:
-		delta = pg.mouse.get_rel()
-		x, y = delta[0], delta[1]
+		case pg.MOUSEMOTION:
+			delta = pg.mouse.get_rel()
+			x, y = delta[0], delta[1]
 
-		polar_coordinates[1] += x / (TAU * 20)
-		polar_coordinates[1] %= TAU
+			polar_coordinates[1] += x / (TAU * 20)
+			polar_coordinates[1] %= TAU
 
-		polar_coordinates[2] -= y / (TAU * 20)
-		polar_coordinates[2] = max(min((polar_coordinates[2]), TAU/4), -TAU/4)
-		return True
+			polar_coordinates[2] -= y / (TAU * 20)
+			polar_coordinates[2] = max(min((polar_coordinates[2]), TAU/4), -TAU/4)
+			return True
 
-	if event.type == pg.MOUSEWHEEL:
-		polar_coordinates[0] *= 1.15 ** event.y
-		return True
+		case pg.MOUSEWHEEL:
+			polar_coordinates[0] *= 1.15 ** event.y
+			return True
 
 	return False
 
 
-def start_engine(title:str, size:tuple[int,int], color:tuple[int,int,int]) -> SurfaceType:
+def make_gameparts(title:str, size:tuple[int,int], color:tuple[int,int,int]) -> SurfaceType:
 	pg.init()
 	pg.display.set_caption(title)
 	window = pg.display.set_mode(size=size)
